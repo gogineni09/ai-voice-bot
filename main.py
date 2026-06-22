@@ -1,7 +1,17 @@
 from anthropic import Anthropic
 from dotenv import load_dotenv
 import os
+from twilio.rest import Client
 load_dotenv(".env")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
+
+twilio_client = Client(
+    TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN
+)
+
 from openai import OpenAI
 
 openrouter_client = OpenAI(
@@ -282,16 +292,23 @@ def make_call(data: CallRequest):
         transfer_number=data.transfer_number,
         status="initiated"
     )
-
     db.add(call)
     db.commit()
+
+    twilio_call = twilio_client.calls.create(
+        to=data.phone_number,
+        from_=TWILIO_PHONE_NUMBER,
+        twiml="<Response><Say>Hello, this is a test call from your AI Voice Bot.</Say></Response>"
+    )
+
+    print("Twilio Call SID:", twilio_call.sid)
+
     db.close()
 
     return {
         "call_id": call_id,
         "status": "initiated"
     }
-
 
 @app.get("/calls")
 def get_calls():
@@ -344,27 +361,3 @@ def call_result(data: CallResult):
         "call_id": data.call_id
     }
 
-@app.post("/webhook/call-result")
-def call_result(data: CallResult):
-
-    db = SessionLocal()
-
-    result = CallResultDB(
-        call_id=data.call_id,
-        status=data.status,
-        duration=data.duration,
-        recording_url=data.recording_url,
-        transcript=data.transcript,
-        summary=data.summary,
-        transfer_status=data.transfer_status
-    )
-
-    db.add(result)
-    db.commit()
-    db.close()
-
-    return {
-        "message": "Call result saved",
-        "call_id": data.call_id
-    }
-  
